@@ -17,9 +17,14 @@ function Register() {
     setSuccess('');
     setLoading(true);
     try {
+      // 1. Register the user
       await api.post('/register/', { username, password });
-      setSuccess('Registration successful! Redirecting to login...');
-      setTimeout(() => navigate('/login'), 2000);
+      
+      // 2. Automatically log them in
+      await api.post('/login/', { username, password });
+      
+      setSuccess('Registration successful! Redirecting to dashboard...');
+      setTimeout(() => navigate('/dashboard'), 1500);
     } catch (err) {
       setError(err.response?.data?.error || 'Registration failed');
     } finally {

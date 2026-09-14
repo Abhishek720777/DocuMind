@@ -91,6 +91,8 @@ def is_greeting(text: str) -> bool:
 class QueryRequest(BaseModel):
     question: str
     top_k: int = 3
+    user_id: int
+    source: Optional[str] = None
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -101,6 +103,7 @@ async def health():
 
 @app.post("/ingest")
 async def ingest_document(
+    user_id: int = Form(...),
     file: Optional[UploadFile] = File(None),
     url: Optional[str] = Form(None)
 ):
@@ -141,7 +144,7 @@ async def ingest_document(
 
     embeddings = embedding_model.encode(chunks).tolist()
     ids = [str(uuid.uuid4()) for _ in range(len(chunks))]
-    metadatas = [{"source": source, "chunk_index": i} for i in range(len(chunks))]
+    metadatas = [{"source": source, "chunk_index": i, "user_id": user_id} for i in range(len(chunks))]
 
     collection.add(
         documents=chunks,
@@ -168,9 +171,19 @@ async def query_document(request: QueryRequest):
 
     query_embedding = embedding_model.encode([question]).tolist()
 
+    where_clause = {"user_id": request.user_id}
+    if request.source:
+        where_clause = {
+            "$and": [
+                {"user_id": request.user_id},
+                {"source": request.source}
+            ]
+        }
+
     results = collection.query(
         query_embeddings=query_embedding,
-        n_results=request.top_k
+        n_results=request.top_k,
+        where=where_clause
     )
 
     retrieved_chunks = results['documents'][0] if results['documents'] else []

@@ -1,9 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import api, { ragApi } from '../api';
 import '../styles/Chat.css';
 
 function Chat() {
+  const [searchParams] = useSearchParams();
+  const sourceParam = searchParams.get('source');
+  
   const [user, setUser] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -15,10 +18,12 @@ function Chat() {
     const fetchUser = async () => {
       try {
         const response = await api.get('/me/');
-        setUser(response.data.username);
+        setUser(response.data);
         setMessages([{
           role: 'assistant',
-          content: 'Hello! I am DocuMind. Ask me anything about the documents you have ingested.',
+          content: sourceParam 
+            ? `Hello! I am DocuMind. Ask me anything about ${sourceParam}.` 
+            : 'Hello! I am DocuMind. Ask me anything about the documents you have ingested.',
           citations: []
         }]);
       } catch (err) {
@@ -46,7 +51,16 @@ function Chat() {
     setLoading(true);
 
     try {
-      const response = await ragApi.post('/query', { question: userMessage, top_k: 3 });
+      const payload = { 
+        question: userMessage, 
+        top_k: 3,
+        user_id: user.id
+      };
+      if (sourceParam) {
+        payload.source = sourceParam;
+      }
+      
+      const response = await ragApi.post('/query', payload);
       
       setMessages(prev => [...prev, { 
         role: 'assistant', 
@@ -88,8 +102,8 @@ function Chat() {
         </div>
         <div className="sidebar-footer">
           <div className="user-info">
-            <div className="avatar">{user?.charAt(0).toUpperCase()}</div>
-            <span>{user}</span>
+            <div className="avatar">{user?.username?.charAt(0).toUpperCase()}</div>
+            <span>{user?.username}</span>
           </div>
           <button onClick={handleLogout} className="logout-icon-btn" title="Logout">
             🚪
@@ -98,6 +112,12 @@ function Chat() {
       </div>
 
       <div className="chat-main">
+        {sourceParam && (
+          <div className="chat-context-banner">
+            Chatting specifically about: <strong>{sourceParam}</strong>
+            <button onClick={() => navigate('/chat')} className="btn outline-btn btn-small">Clear Filter</button>
+          </div>
+        )}
         <div className="messages-container">
           {messages.map((msg, index) => (
             <div key={index} className={`message-wrapper ${msg.role}`}>

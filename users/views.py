@@ -64,4 +64,25 @@ class UserView(APIView):
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
-        return Response({"username": request.user.username})
+        return Response({"id": request.user.id, "username": request.user.username})
+
+from rest_framework import generics
+from .models import Document
+from .serializers import DocumentSerializer
+
+class DocumentListView(generics.ListCreateAPIView):
+    serializer_class = DocumentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Document.objects.filter(user=self.request.user).order_by('-created_at')
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+class DocumentDetailView(generics.DestroyAPIView):
+    serializer_class = DocumentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Document.objects.filter(user=self.request.user)

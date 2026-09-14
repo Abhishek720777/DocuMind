@@ -25,10 +25,12 @@ groq_client = Groq(api_key=GROQ_API_KEY)
 
 def _pick_chat_model() -> str:
     """Query Groq's /models endpoint and return the best available chat model."""
+    # openai/gpt-oss-* are standard non-thinking models — preferred over Qwen3
+    # which emits <think> reasoning blocks even when told not to.
     WHITELIST = [
-        "qwen/qwen3.6-27b",
-        "openai/gpt-oss-120b",
         "openai/gpt-oss-20b",
+        "openai/gpt-oss-120b",
+        "qwen/qwen3.6-27b",
         "qwen/qwen3.8-27b",
     ]
     try:
@@ -45,7 +47,7 @@ def _pick_chat_model() -> str:
                 return candidate
     except Exception as e:
         print(f"[DocuMind] WARNING: Could not resolve Groq model list ({e}). Defaulting.")
-    return "qwen/qwen3.6-27b"
+    return "openai/gpt-oss-20b"
 
 GROQ_MODEL = _pick_chat_model()
 
@@ -184,15 +186,16 @@ async def query_document(request: QueryRequest):
         citations.append({"source": meta['source'], "chunk_index": meta['chunk_index'], "text": chunk})
 
     system_prompt = (
+        "/no_think\n"
         "You are DocuMind, a helpful AI assistant. "
         "Answer the user's question using ONLY the provided context chunks. "
         "Do not use any external knowledge. "
-        "If the context does not contain a clear answer, say exactly: 'I cannot find the answer in the provided documents.' "
+        "If the context does not contain a clear answer, say: 'I cannot find the answer in the provided documents.' "
         "Always cite which chunk(s) you used with [Chunk X] inline in your answer. "
-        "Be concise and direct. Do not output your reasoning or thought process — only the final answer."
+        "Be concise and direct. Output only the final answer, nothing else."
     )
 
-    user_message = f"Context:\n{context_text}\n\nQuestion: {question}\n\nAnswer:"
+    user_message = f"Context:\n{context_text}\n\nQuestion: {question}\n\nAnswer (cite sources with [Chunk X]):"
 
     try:
         completion = groq_client.chat.completions.create(

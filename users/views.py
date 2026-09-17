@@ -1,12 +1,41 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import status, generics
 from django.contrib.auth import get_user_model
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.conf import settings
 
+from .models import Document
+from .serializers import DocumentSerializer
+
 User = get_user_model()
+
+
+def _set_auth_cookies(response: Response, tokens: dict) -> None:
+    """Helper to set both the access and refresh token HTTPOnly cookies."""
+    access_lifetime = settings.SIMPLE_JWT['ACCESS_TOKEN_LIFETIME']
+    refresh_lifetime = settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME']
+    cookie_kwargs = {
+        'secure': settings.SIMPLE_JWT['AUTH_COOKIE_SECURE'],
+        'httponly': settings.SIMPLE_JWT['AUTH_COOKIE_HTTP_ONLY'],
+        'samesite': settings.SIMPLE_JWT['AUTH_COOKIE_SAMESITE'],
+        'path': settings.SIMPLE_JWT['AUTH_COOKIE_PATH'],
+    }
+    response.set_cookie(
+        key=settings.SIMPLE_JWT['AUTH_COOKIE'],
+        value=tokens['access'],
+        max_age=access_lifetime,
+        **cookie_kwargs,
+    )
+    response.set_cookie(
+        key=settings.SIMPLE_JWT['AUTH_COOKIE_REFRESH'],
+        value=tokens['refresh'],
+        max_age=refresh_lifetime,
+        **cookie_kwargs,
+    )
+
 
 def get_tokens_for_user(user):
     refresh = RefreshToken.for_user(user)
@@ -15,60 +44,100 @@ def get_tokens_for_user(user):
         'access': str(refresh.access_token),
     }
 
+
 class RegisterView(APIView):
     permission_classes = [AllowAny]
-    
+
     def post(self, request):
-        username = request.data.get('username')
-        password = request.data.get('password')
+        username = request.data.get('username', '').strip()
+        password = request.data.get('password', '')
         if not username or not password:
-            return Response({"error": "Username and password required"}, status=status.HTTP_400_BAD_REQUEST)
-            
+            return Response(
+                {"error": "Username and password required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if len(password) < 8:
+            return Response(
+                {"error": "Password must be at least 8 characters"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         if User.objects.filter(username=username).exists():
-            return Response({"error": "Username already taken"}, status=status.HTTP_400_BAD_REQUEST)
-            
-        user = User.objects.create_user(username=username, password=password)
-        return Response({"message": "User created successfully"}, status=status.HTTP_201_CREATED)
+            return Response(
+                {"error": "Username already taken"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        User.objects.create_user(username=username, password=password)
+        return Response(
+            {"message": "User created successfully"},
+            status=status.HTTP_201_CREATED
+        )
+
 
 class LoginView(APIView):
     permission_classes = [AllowAny]
-    
+
     def post(self, request):
-        username = request.data.get('username')
-        password = request.data.get('password')
-        
+        username = request.data.get('username', '').strip()
+        password = request.data.get('password', '')
+
         user = User.objects.filter(username=username).first()
         if user is None or not user.check_password(password):
-            return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
-            
+            return Response(
+                {"error": "Invalid credentials"},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
         tokens = get_tokens_for_user(user)
         response = Response({"message": "Login successful"})
-        
-        response.set_cookie(
-            key=settings.SIMPLE_JWT['AUTH_COOKIE'],
-            value=tokens['access'],
-            max_age=settings.SIMPLE_JWT['ACCESS_TOKEN_LIFETIME'],
-            secure=settings.SIMPLE_JWT['AUTH_COOKIE_SECURE'],
-            httponly=settings.SIMPLE_JWT['AUTH_COOKIE_HTTP_ONLY'],
-            samesite=settings.SIMPLE_JWT['AUTH_COOKIE_SAMESITE']
-        )
+        _set_auth_cookies(response, tokens)
         return response
+
 
 class LogoutView(APIView):
     def post(self, request):
         response = Response({"message": "Logged out successfully"})
         response.delete_cookie(settings.SIMPLE_JWT['AUTH_COOKIE'])
+        response.delete_cookie(settings.SIMPLE_JWT['AUTH_COOKIE_REFRESH'])
         return response
+
+
+class TokenRefreshView(APIView):
+    """
+    Read the refresh token cookie and issue a fresh pair of tokens.
+    Called automatically by the frontend when a 401 is received.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        refresh_token = request.COOKIES.get(settings.SIMPLE_JWT['AUTH_COOKIE_REFRESH'])
+        if not refresh_token:
+            return Response(
+                {"error": "No refresh token provided"},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        try:
+            refresh = RefreshToken(refresh_token)
+            tokens = {
+                'access': str(refresh.access_token),
+                'refresh': str(refresh),
+            }
+        except (TokenError, InvalidToken):
+            return Response(
+                {"error": "Invalid or expired refresh token. Please log in again."},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        response = Response({"message": "Token refreshed"})
+        _set_auth_cookies(response, tokens)
+        return response
+
 
 class UserView(APIView):
     permission_classes = [IsAuthenticated]
-    
+
     def get(self, request):
         return Response({"id": request.user.id, "username": request.user.username})
 
-from rest_framework import generics
-from .models import Document
-from .serializers import DocumentSerializer
 
 class DocumentListView(generics.ListCreateAPIView):
     serializer_class = DocumentSerializer
@@ -79,6 +148,7 @@ class DocumentListView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
 
 class DocumentDetailView(generics.DestroyAPIView):
     serializer_class = DocumentSerializer

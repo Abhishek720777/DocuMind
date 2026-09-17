@@ -126,7 +126,7 @@ async def ingest_document(
     elif url:
         source = url
         try:
-            response = requests.get(url, timeout=10)
+            response = requests.get(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}, timeout=10)
             response.raise_for_status()
             soup = BeautifulSoup(response.content, "html.parser")
             text = soup.get_text(separator="\n", strip=True)
@@ -201,14 +201,14 @@ async def query_document(request: QueryRequest):
     system_prompt = (
         "/no_think\n"
         "You are DocuMind, a helpful AI assistant. "
-        "Answer the user's question using ONLY the provided context chunks. "
-        "Do not use any external knowledge. "
-        "If the context does not contain a clear answer, say: 'I cannot find the answer in the provided documents.' "
-        "Always cite which chunk(s) you used with [Chunk X] inline in your answer. "
-        "Be concise and direct. Output only the final answer, nothing else."
+        "You will be provided with Context chunks. "
+        "1. If the user asks a question about the documents, use the Context and cite chunks inline like [Chunk 1].\n"
+        "2. If the user says a greeting or makes conversational small talk (e.g., 'okay', 'what are you', 'thanks'), respond naturally and friendly without citing anything.\n"
+        "3. If the user asks a general factual question NOT in the context, answer using your general knowledge but state clearly it is from general knowledge, not the documents.\n"
+        "Do NOT say 'I cannot find the answer' for conversational inputs or general knowledge questions. Only output the final answer."
     )
 
-    user_message = f"Context:\n{context_text}\n\nQuestion: {question}\n\nAnswer (cite sources with [Chunk X]):"
+    user_message = f"Context:\n{context_text}\n\nQuestion: {question}\n\nAnswer:"
 
     try:
         completion = groq_client.chat.completions.create(
@@ -226,7 +226,13 @@ async def query_document(request: QueryRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"LLM Generation failed: {str(e)}")
 
+    # Filter citations to only include those actually cited by the LLM
+    used_citations = []
+    for i, cit in enumerate(citations):
+        if f"[Chunk {i+1}]" in answer:
+            used_citations.append(cit)
+
     return {
         "answer": answer,
-        "citations": citations
+        "citations": used_citations
     }

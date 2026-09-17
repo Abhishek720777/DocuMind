@@ -49,6 +49,7 @@ function Dashboard() {
       setMessage('Please provide a file or a URL');
       return;
     }
+    if (!user) return;
     
     setLoading(true);
     setMessage('');

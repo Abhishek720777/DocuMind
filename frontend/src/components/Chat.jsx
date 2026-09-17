@@ -43,7 +43,7 @@ function Chat() {
 
   const handleSend = async (e) => {
     e.preventDefault();
-    if (!input.trim()) return;
+    if (!input.trim() || !user) return;
 
     const userMessage = input.trim();
     setInput('');

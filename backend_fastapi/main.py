@@ -204,8 +204,8 @@ async def query_document(request: QueryRequest):
         "You will be provided with Context chunks. "
         "1. If the user asks a question about the documents, use the Context and cite chunks inline like [Chunk 1].\n"
         "2. If the user says a greeting or makes conversational small talk (e.g., 'okay', 'what are you', 'thanks'), respond naturally and friendly without citing anything.\n"
-        "3. If the user asks a general factual question NOT in the context, answer using your general knowledge but state clearly it is from general knowledge, not the documents.\n"
-        "Do NOT say 'I cannot find the answer' for conversational inputs or general knowledge questions. Only output the final answer."
+        "3. If the user asks a factual question NOT found in the Context, politely decline and state that the answer is not in the provided documents. Do NOT use your general knowledge to answer.\n"
+        "Only output the final answer."
     )
 
     user_message = f"Context:\n{context_text}\n\nQuestion: {question}\n\nAnswer:"

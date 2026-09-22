@@ -11,7 +11,7 @@ class CustomUser(AbstractUser):
 
 class Document(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='documents')
-    source = models.CharField(max_length=255) # filename or URL
+    source = models.TextField() # filename or URL
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

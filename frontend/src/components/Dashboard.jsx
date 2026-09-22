@@ -57,15 +57,11 @@ function Dashboard() {
     const formData = new FormData();
     if (file) formData.append('file', file);
     if (url) formData.append('url', url);
-    formData.append('user_id', user.id);
 
     try {
       const response = await ragApi.post('/ingest', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      
-      // Save metadata to Django
-      await api.post('/documents/', { source: response.data.source });
       
       setMessage(`Success! Ingested ${response.data.chunks_processed} chunks from ${response.data.source}`);
       setFile(null);

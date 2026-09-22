@@ -53,8 +53,7 @@ function Chat() {
     try {
       const payload = { 
         question: userMessage, 
-        top_k: 3,
-        user_id: user.id
+        top_k: 3
       };
       if (sourceParam) {
         payload.source = sourceParam;

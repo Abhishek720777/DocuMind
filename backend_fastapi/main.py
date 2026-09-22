@@ -7,10 +7,11 @@ from pathlib import Path
 from typing import Optional
 
 import httpx
-import PyPDF2
-from bs4 import BeautifulSoup
+import fitz  # PyMuPDF
+from newspaper import Article
+import jwt
 from dotenv import load_dotenv
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from groq import Groq
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -21,46 +22,16 @@ import chromadb
 # ── Load .env from the project root ──────────────────────────────────────────
 load_dotenv(Path(__file__).resolve().parent.parent / '.env')
 
-# ── Groq setup ────────────────────────────────────────────────────────────────
+# ── Env & Auth Setup ──────────────────────────────────────────────────────────
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 if not GROQ_API_KEY:
     raise RuntimeError("GROQ_API_KEY environment variable is not set.")
 
+DJANGO_SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "")
+if not DJANGO_SECRET_KEY:
+    raise RuntimeError("DJANGO_SECRET_KEY environment variable is not set.")
+
 groq_client = Groq(api_key=GROQ_API_KEY)
-
-SCRAPER_HEADERS = {
-    'User-Agent': (
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-        'AppleWebKit/537.36 (KHTML, like Gecko) '
-        'Chrome/91.0.4472.124 Safari/537.36'
-    )
-}
-
-
-async def _pick_chat_model() -> str:
-    """Query Groq's /models endpoint and return the best available chat model."""
-    WHITELIST = [
-        "openai/gpt-oss-20b",
-        "openai/gpt-oss-120b",
-        "qwen/qwen3.6-27b",
-        "qwen/qwen3.8-27b",
-    ]
-    try:
-        async with httpx.AsyncClient(timeout=8) as client:
-            resp = await client.get(
-                "https://api.groq.com/openai/v1/models",
-                headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
-            )
-            resp.raise_for_status()
-            available_ids = {m["id"] for m in resp.json().get("data", [])}
-            for candidate in WHITELIST:
-                if candidate in available_ids:
-                    print(f"[DocuMind] Using Groq model: {candidate}")
-                    return candidate
-    except Exception as e:
-        print(f"[DocuMind] WARNING: Could not resolve Groq model list ({e}). Defaulting.")
-    return "openai/gpt-oss-20b"
-
 
 # ── RAG components ────────────────────────────────────────────────────────────
 embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
@@ -68,8 +39,8 @@ chroma_client = chromadb.PersistentClient(path="./chroma_db")
 collection = chroma_client.get_or_create_collection(name="documind_chunks")
 
 text_splitter = RecursiveCharacterTextSplitter(
-    chunk_size=500,
-    chunk_overlap=50,
+    chunk_size=1000,
+    chunk_overlap=200,
     length_function=len,
     is_separator_regex=False,
 )
@@ -77,14 +48,12 @@ text_splitter = RecursiveCharacterTextSplitter(
 # ── App ───────────────────────────────────────────────────────────────────────
 app = FastAPI(title="DocuMind RAG API")
 
-GROQ_MODEL: str = "openai/gpt-oss-20b"  # resolved on startup
-
+GROQ_MODEL: str = "llama3-8b-8192"
 
 @app.on_event("startup")
 async def startup_event():
     global GROQ_MODEL
-    GROQ_MODEL = await _pick_chat_model()
-
+    GROQ_MODEL = "llama3-8b-8192"
 
 app.add_middleware(
     CORSMiddleware,
@@ -96,38 +65,46 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ── Auth Dependency ───────────────────────────────────────────────────────────
+def get_current_user_id(request: Request) -> int:
+    token = request.cookies.get("access_token")
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated (missing access_token cookie)")
+    try:
+        # Django SimpleJWT creates tokens with user_id in the 'user_id' claim
+        payload = jwt.decode(token, DJANGO_SECRET_KEY, algorithms=["HS256"])
+        return payload.get("user_id")
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+def get_access_token(request: Request) -> str:
+    token = request.cookies.get("access_token")
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return token
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def strip_thinking(text: str) -> str:
     """Remove <think>...</think> blocks that Qwen3 / reasoning models emit."""
     return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
-
-GREETING_PATTERN = re.compile(
-    r"^\s*(hi|hello|hey|howdy|yo|sup|good\s*(morning|afternoon|evening|day)|what'?s up|greetings)\W*$",
-    re.IGNORECASE,
-)
-
-
-def is_greeting(text: str) -> bool:
-    return bool(GREETING_PATTERN.match(text))
-
-
 def _extract_text_from_pdf_path(path: str) -> str:
-    """Extract text from a PDF file on disk (avoids loading entire file into RAM)."""
+    """Extract text from a PDF file using PyMuPDF (fitz) for better accuracy."""
     text = ""
-    with open(path, "rb") as f:
-        pdf_reader = PyPDF2.PdfReader(f)
-        for page in pdf_reader.pages:
-            page_text = page.extract_text()
-            if page_text:
-                text += page_text + "\n"
+    try:
+        doc = fitz.open(path)
+        for page in doc:
+            text += page.get_text("text") + "\n"
+        doc.close()
+    except Exception as e:
+        print(f"PyMuPDF error: {e}")
     return text
-
 
 class QueryRequest(BaseModel):
     question: str
     top_k: int = 3
-    user_id: int
     source: Optional[str] = None
 
 
@@ -139,9 +116,10 @@ async def health():
 
 @app.post("/ingest")
 async def ingest_document(
-    user_id: int = Form(...),
     file: Optional[UploadFile] = File(None),
-    url: Optional[str] = Form(None)
+    url: Optional[str] = Form(None),
+    user_id: int = Depends(get_current_user_id),
+    access_token: str = Depends(get_access_token)
 ):
     text = ""
     source = ""
@@ -149,7 +127,6 @@ async def ingest_document(
     if file:
         source = file.filename
 
-        # Stream the upload to a temp file to avoid loading it entirely into RAM
         suffix = Path(file.filename).suffix.lower()
         if suffix not in (".pdf", ".txt"):
             raise HTTPException(
@@ -175,18 +152,12 @@ async def ingest_document(
     elif url:
         source = url
         try:
-            async with httpx.AsyncClient(
-                headers=SCRAPER_HEADERS, timeout=10, follow_redirects=True
-            ) as client:
-                response = await client.get(url)
-                response.raise_for_status()
-            soup = BeautifulSoup(response.content, "html.parser")
-            text = soup.get_text(separator="\n", strip=True)
-        except httpx.HTTPStatusError as e:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Failed to scrape URL (HTTP {e.response.status_code}): {url}"
-            )
+            article = Article(url)
+            article.download()
+            article.parse()
+            text = article.text
+            if not text:
+                raise ValueError("No article content found")
         except Exception as e:
             raise HTTPException(
                 status_code=400, detail=f"Failed to scrape URL: {str(e)}"
@@ -221,6 +192,22 @@ async def ingest_document(
         ids=ids,
     )
 
+    # Automatically sync the document to Django internally
+    django_url = os.getenv("DJANGO_API_URL", "http://django:8000/api/users/documents/")
+    if not os.environ.get('DB_HOST'):
+        django_url = "http://localhost:8000/api/users/documents/"
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                django_url,
+                json={"source": source},
+                cookies={"access_token": access_token}
+            )
+            resp.raise_for_status()
+    except Exception as e:
+        print(f"Warning: Failed to sync document to Django: {e}")
+
     return {
         "message": "Ingestion successful",
         "source": source,
@@ -229,25 +216,21 @@ async def ingest_document(
 
 
 @app.post("/query")
-async def query_document(request: QueryRequest):
+async def query_document(
+    request: QueryRequest,
+    user_id: int = Depends(get_current_user_id)
+):
     question = request.question.strip()
     if not question:
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
 
-    # Short-circuit for greetings — no point running RAG on "hi"
-    if is_greeting(question):
-        return {
-            "answer": "Hello! I'm DocuMind. Upload a document or scrape a URL from the Dashboard, then ask me anything about it.",
-            "citations": []
-        }
-
     query_embedding = embedding_model.encode([question]).tolist()
 
-    where_clause: dict = {"user_id": request.user_id}
+    where_clause: dict = {"user_id": user_id}
     if request.source:
         where_clause = {
             "$and": [
-                {"user_id": request.user_id},
+                {"user_id": user_id},
                 {"source": request.source}
             ]
         }
@@ -280,10 +263,9 @@ async def query_document(request: QueryRequest):
     system_prompt = (
         "/no_think\n"
         "You are DocuMind, a helpful AI assistant. "
-        "You will be provided with Context chunks. "
-        "1. If the user asks a question about the documents, use the Context and cite chunks inline like [Chunk 1].\n"
-        "2. If the user says a greeting or makes conversational small talk (e.g., 'okay', 'what are you', 'thanks'), respond naturally and friendly without citing anything.\n"
-        "3. If the user asks a factual question NOT found in the Context, politely decline and state that the answer is not in the provided documents. Do NOT use your general knowledge to answer.\n"
+        "1. If the user asks a question about the documents, use the provided Context chunks and cite them inline like [Chunk 1].\n"
+        "2. If the user says a greeting or makes conversational small talk (e.g., 'hi', 'how are you'), respond naturally and friendly without citing anything.\n"
+        "3. If the user asks a factual question NOT found in the Context, politely decline and state that the answer is not in the provided documents.\n"
         "Only output the final answer."
     )
 

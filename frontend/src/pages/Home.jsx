@@ -347,16 +347,16 @@ const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,340;0,9..144,440;0,9..144,600;1,9..144,440&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
 .dm-root {
-  --paper: #E8ECEE;
-  --paper-warm: #F7F4EC;
+  --paper: #F4F1EA;
+  --paper-warm: #FAF8F5;
   --ink: #16233D;
   --ink-soft: #48566E;
-  --ink-faint: #8593A6;
-  --brass: #B07F26;
-  --brass-soft: #E9D8AE;
-  --moss: #47624F;
-  --line: #C6CFD6;
-  --shadow: rgba(22, 35, 61, 0.14);
+  --ink-faint: #7E8C9F;
+  --brass: #9E6F1D;
+  --brass-soft: #EFE4CE;
+  --moss: #335940;
+  --line: #D8D4CA;
+  --shadow: rgba(22, 35, 61, 0.08);
 
   background: var(--paper);
   color: var(--ink);

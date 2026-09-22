@@ -32,6 +32,10 @@ function Register() {
   const handleRegister = async (e) => {
     e.preventDefault();
     setError('');
+    if (!email.trim()) {
+      setError('Email is required.');
+      return;
+    }
     if (password !== confirmPassword) {
       setError('Passwords do not match.');
       return;
@@ -42,7 +46,7 @@ function Register() {
     }
     setLoading(true);
     try {
-      await api.post('register/', { username, password });
+      await api.post('register/', { username, email: email.trim(), password });
       await api.post('login/', { username, password });
       navigate('/dashboard');
     } catch (err) {
@@ -90,7 +94,7 @@ function Register() {
             </div>
 
             <div className="dm-field">
-              <label htmlFor="email">Email <span className="dm-field-optional">(optional)</span></label>
+              <label htmlFor="email">Email</label>
               <input
                 id="email"
                 type="email"
@@ -98,6 +102,7 @@ function Register() {
                 placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                required
               />
             </div>
 
@@ -113,8 +118,18 @@ function Register() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                 />
-                <button type="button" className="dm-pass-toggle" onClick={() => setShowPass(v => !v)} tabIndex={-1}>
-                  {showPass ? '🙈' : '👁️'}
+                <button type="button" className="dm-pass-toggle" onClick={() => setShowPass(v => !v)} tabIndex={-1} aria-label={showPass ? 'Hide password' : 'Show password'}>
+                  {showPass ? (
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                      <line x1="1" y1="1" x2="23" y2="23" />
+                    </svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  )}
                 </button>
               </div>
               {password.length > 0 && (
@@ -146,8 +161,18 @@ function Register() {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
                 />
-                <button type="button" className="dm-pass-toggle" onClick={() => setShowConfirm(v => !v)} tabIndex={-1}>
-                  {showConfirm ? '🙈' : '👁️'}
+                <button type="button" className="dm-pass-toggle" onClick={() => setShowConfirm(v => !v)} tabIndex={-1} aria-label={showConfirm ? 'Hide password' : 'Show password'}>
+                  {showConfirm ? (
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                      <line x1="1" y1="1" x2="23" y2="23" />
+                    </svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  )}
                 </button>
               </div>
               {passwordsMatch && <p className="dm-pass-match ok">✓ Passwords match</p>}
@@ -175,18 +200,18 @@ const AUTH_CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,340;0,9..144,440;0,9..144,600;1,9..144,440&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
 .dm-auth-root {
-  --paper: #E8ECEE;
-  --paper-warm: #F7F4EC;
+  --paper: #F4F1EA;
+  --paper-warm: #FAF8F5;
   --ink: #16233D;
   --ink-soft: #48566E;
-  --ink-faint: #8593A6;
-  --brass: #B07F26;
-  --brass-soft: #E9D8AE;
-  --moss: #47624F;
-  --line: #C6CFD6;
-  --shadow: rgba(22, 35, 61, 0.14);
-  --error: #8B2020;
-  --error-bg: #FDECEA;
+  --ink-faint: #7E8C9F;
+  --brass: #9E6F1D;
+  --brass-soft: #EFE4CE;
+  --moss: #335940;
+  --line: #D8D4CA;
+  --shadow: rgba(22, 35, 61, 0.08);
+  --error: #9C2B1B;
+  --error-bg: #FDF0EE;
 
   min-height: 100vh;
   background: var(--paper);

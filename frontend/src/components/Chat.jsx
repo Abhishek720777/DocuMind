@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import api, { ragApi } from '../api';
 import '../styles/Chat.css';
 
@@ -22,8 +22,8 @@ function Chat() {
         setMessages([{
           role: 'assistant',
           content: sourceParam 
-            ? `Hello! I am DocuMind. Ask me anything about ${sourceParam}.` 
-            : 'Hello! I am DocuMind. Ask me anything about the documents you have ingested.',
+            ? `I am ready. Ask me any question specifically about "${sourceParam}".` 
+            : 'I am ready. Ask me anything about any of the documents or pages you have indexed.',
           citations: []
         }]);
       } catch (err) {
@@ -31,7 +31,7 @@ function Chat() {
       }
     };
     fetchUser();
-  }, [navigate]);
+  }, [navigate, sourceParam]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -39,11 +39,11 @@ function Chat() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, loading]);
 
   const handleSend = async (e) => {
     e.preventDefault();
-    if (!input.trim() || !user) return;
+    if (!input.trim() || !user || loading) return;
 
     const userMessage = input.trim();
     setInput('');
@@ -69,7 +69,7 @@ function Chat() {
     } catch (err) {
       setMessages(prev => [...prev, { 
         role: 'error', 
-        content: err.response?.data?.detail || 'An error occurred while generating the answer.' 
+        content: err.response?.data?.detail || 'An error occurred while generating the answer from your knowledge base.' 
       }]);
     } finally {
       setLoading(false);
@@ -86,86 +86,123 @@ function Chat() {
   };
 
   return (
-    <div className="chat-layout">
-      <div className="chat-sidebar">
-        <div className="sidebar-header">
-          <h2>DocuMind</h2>
-        </div>
-        <div className="sidebar-content">
-          <button onClick={() => navigate('/dashboard')} className="sidebar-item">
-            <span className="icon">📄</span> Manage Knowledge
-          </button>
-          <div className="sidebar-item active">
-            <span className="icon">💬</span> Chat
-          </div>
-        </div>
-        <div className="sidebar-footer">
-          <div className="user-info">
-            <div className="avatar">{user?.username?.charAt(0).toUpperCase()}</div>
-            <span>{user?.username}</span>
-          </div>
-          <button onClick={handleLogout} className="logout-icon-btn" title="Logout">
-            🚪
-          </button>
-        </div>
-      </div>
+    <div className="dm-chat-layout">
+      {/* Left Sidebar */}
+      <aside className="dm-chat-sidebar">
+        <div className="dm-chat-sidebar-top">
+          <Link to="/" className="dm-chat-brand">
+            <svg viewBox="0 0 28 28" className="dm-brand-mark" aria-hidden="true">
+              <rect x="5" y="3" width="15" height="20" rx="2.4" fill="none" stroke="currentColor" strokeWidth="1.6" />
+              <rect x="9" y="7" width="15" height="20" rx="2.4" fill="var(--paper-card)" stroke="currentColor" strokeWidth="1.6" />
+              <circle cx="19.2" cy="12.4" r="1.4" fill="var(--brass)" />
+            </svg>
+            <span className="dm-chat-brand-title">DocuMind</span>
+          </Link>
 
-      <div className="chat-main">
+          <nav className="dm-chat-nav-menu">
+            <button onClick={() => navigate('/dashboard')} className="dm-nav-item">
+              <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.4">
+                <rect x="2" y="2" width="5" height="5" rx="1" />
+                <rect x="9" y="2" width="5" height="5" rx="1" />
+                <rect x="2" y="9" width="5" height="5" rx="1" />
+                <rect x="9" y="9" width="5" height="5" rx="1" />
+              </svg>
+              <span>Knowledge Shelf</span>
+            </button>
+
+            <div className="dm-nav-item active">
+              <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.4">
+                <path d="M2.5 4.5A2.5 2.5 0 0 1 5 2h6a2.5 2.5 0 0 1 2.5 2.5v5A2.5 2.5 0 0 1 11 12H6.5L3 14.5V12a2.5 2.5 0 0 1-0.5-2.5v-5z" />
+              </svg>
+              <span>Active Conversation</span>
+            </div>
+          </nav>
+        </div>
+
+        <div className="dm-chat-sidebar-bottom">
+          <div className="dm-chat-user">
+            <div className="dm-avatar">{user?.username?.charAt(0).toUpperCase()}</div>
+            <span className="dm-chat-username">{user?.username}</span>
+          </div>
+          <button onClick={handleLogout} className="dm-chat-logout-btn" title="Sign out">
+            <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.4">
+              <path d="M6 14H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1h3" />
+              <polyline points="10 11 13 8 10 5" />
+              <line x1="13" y1="8" x2="4" y2="8" />
+            </svg>
+          </button>
+        </div>
+      </aside>
+
+      {/* Main Conversation Stream */}
+      <main className="dm-chat-main">
         {sourceParam && (
-          <div className="chat-context-banner">
-            Chatting specifically about: <strong>{sourceParam}</strong>
-            <button onClick={() => navigate('/chat')} className="btn outline-btn btn-small">Clear Filter</button>
+          <div className="dm-chat-filter-bar">
+            <div className="dm-filter-info">
+              <span className="dm-filter-label">Scoped Source:</span>
+              <strong className="dm-filter-name">{sourceParam}</strong>
+            </div>
+            <button onClick={() => navigate('/chat')} className="dm-filter-clear-btn">
+              Clear Filter (Search All)
+            </button>
           </div>
         )}
-        <div className="messages-container">
+
+        <div className="dm-messages-stream">
           {messages.map((msg, index) => (
-            <div key={index} className={`message-wrapper ${msg.role}`}>
-              <div className="message-bubble">
-                <div className="message-content">{msg.content}</div>
+            <div key={index} className={`dm-msg-row dm-msg-row--${msg.role}`}>
+              <div className="dm-bubble">
+                <div className="dm-bubble-text">{msg.content}</div>
+
                 {msg.citations && msg.citations.length > 0 && (
-                  <div className="citations">
-                    <h4>Sources:</h4>
-                    {msg.citations.map((cit, i) => (
-                      <div key={i} className="citation-item">
-                        <span className="citation-badge">[{cit.chunk_index}]</span> {cit.source}
-                      </div>
-                    ))}
+                  <div className="dm-citations-panel">
+                    <span className="dm-citations-title">Verified Citations</span>
+                    <div className="dm-citations-list">
+                      {msg.citations.map((cit, i) => (
+                        <div key={i} className="dm-citation-chip">
+                          <span className="dm-citation-badge">Passage #{cit.chunk_index + 1}</span>
+                          <span className="dm-citation-source">{cit.source}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
             </div>
           ))}
+
           {loading && (
-            <div className="message-wrapper assistant">
-              <div className="message-bubble typing">
-                <div className="dot"></div>
-                <div className="dot"></div>
-                <div className="dot"></div>
+            <div className="dm-msg-row dm-msg-row--assistant">
+              <div className="dm-bubble dm-bubble--typing">
+                <span /><span /><span />
               </div>
             </div>
           )}
           <div ref={messagesEndRef} />
         </div>
 
-        <div className="input-area">
-          <form onSubmit={handleSend} className="chat-form">
+        {/* Input area */}
+        <div className="dm-chat-bottom-bar">
+          <form onSubmit={handleSend} className="dm-chat-input-form">
             <input
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask a question about your documents..."
-              className="chat-input"
+              placeholder={sourceParam ? `Ask anything about ${sourceParam}...` : "Ask a question across your indexed documents..."}
+              className="dm-chat-text-input"
               disabled={loading}
+              autoFocus
             />
-            <button type="submit" className="send-btn" disabled={loading || !input.trim()}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+            <button type="submit" className="dm-chat-send-btn" disabled={loading || !input.trim()}>
+              <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6">
+                <line x1="3" y1="8" x2="13" y2="8" />
+                <polyline points="9 4 13 8 9 12" />
+              </svg>
             </button>
           </form>
-          <div className="chat-footer">
-            DocuMind uses RAG to answer from your knowledge base.
-          </div>
+          <span className="dm-chat-disclaimer">DocuMind references passages stored in your vector memory.</span>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

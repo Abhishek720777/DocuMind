@@ -50,10 +50,11 @@ class RegisterView(APIView):
 
     def post(self, request):
         username = request.data.get('username', '').strip()
+        email = request.data.get('email', '').strip()
         password = request.data.get('password', '')
-        if not username or not password:
+        if not username or not password or not email:
             return Response(
-                {"error": "Username and password required"},
+                {"error": "Username, email, and password are required"},
                 status=status.HTTP_400_BAD_REQUEST
             )
         if len(password) < 8:
@@ -66,7 +67,12 @@ class RegisterView(APIView):
                 {"error": "Username already taken"},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        User.objects.create_user(username=username, password=password)
+        if User.objects.filter(email=email).exists():
+            return Response(
+                {"error": "Email is already registered"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        User.objects.create_user(username=username, email=email, password=password)
         return Response(
             {"message": "User created successfully"},
             status=status.HTTP_201_CREATED

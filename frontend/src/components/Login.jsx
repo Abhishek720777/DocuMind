@@ -15,7 +15,7 @@ function Login() {
     setError('');
     setLoading(true);
     try {
-      await api.post('/login/', { username, password });
+      await api.post('login/', { username, password });
       navigate('/dashboard');
     } catch (err) {
       setError(err.response?.data?.error || 'Login failed. Please check your credentials.');

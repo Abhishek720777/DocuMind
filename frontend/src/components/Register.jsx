@@ -42,8 +42,8 @@ function Register() {
     }
     setLoading(true);
     try {
-      await api.post('/register/', { username, password });
-      await api.post('/login/', { username, password });
+      await api.post('register/', { username, password });
+      await api.post('login/', { username, password });
       navigate('/dashboard');
     } catch (err) {
       setError(err.response?.data?.error || 'Registration failed. Please try again.');

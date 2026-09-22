@@ -59,9 +59,7 @@ function Dashboard() {
     if (url) formData.append('url', url);
 
     try {
-      const response = await ragApi.post('ingest', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      const response = await ragApi.post('ingest', formData);
 
       // Save document record to Django after successful FastAPI ingestion
       await api.post('documents/', { source: response.data.source });

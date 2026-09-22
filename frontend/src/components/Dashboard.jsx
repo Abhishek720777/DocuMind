@@ -14,7 +14,7 @@ function Dashboard() {
 
   const fetchDocuments = async () => {
     try {
-      const response = await api.get('/documents/');
+      const response = await api.get('documents/');
       setDocuments(response.data);
     } catch (err) {
       console.error('Failed to fetch documents');
@@ -24,7 +24,7 @@ function Dashboard() {
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const response = await api.get('/me/');
+        const response = await api.get('me/');
         setUser(response.data);
         fetchDocuments();
       } catch (err) {
@@ -36,7 +36,7 @@ function Dashboard() {
 
   const handleLogout = async () => {
     try {
-      await api.post('/logout/');
+      await api.post('logout/');
       navigate('/login');
     } catch (err) {
       console.error('Logout failed');
@@ -59,7 +59,7 @@ function Dashboard() {
     if (url) formData.append('url', url);
 
     try {
-      const response = await ragApi.post('/ingest', formData, {
+      const response = await ragApi.post('ingest', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       

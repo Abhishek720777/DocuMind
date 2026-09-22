@@ -13,6 +13,14 @@ export default defineConfig({
       '/ingest': {
         target: 'http://127.0.0.1:8001',
         changeOrigin: true,
+      },
+      '/query': {
+        target: 'http://127.0.0.1:8001',
+        changeOrigin: true,
+      },
+      '/health': {
+        target: 'http://127.0.0.1:8001',
+        changeOrigin: true,
       }
     }
   }

@@ -17,7 +17,7 @@ function Chat() {
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const response = await api.get('/me/');
+        const response = await api.get('me/');
         setUser(response.data);
         setMessages([{
           role: 'assistant',
@@ -59,7 +59,7 @@ function Chat() {
         payload.source = sourceParam;
       }
       
-      const response = await ragApi.post('/query', payload);
+      const response = await ragApi.post('query', payload);
       
       setMessages(prev => [...prev, { 
         role: 'assistant', 
@@ -78,7 +78,7 @@ function Chat() {
 
   const handleLogout = async () => {
     try {
-      await api.post('/logout/');
+      await api.post('logout/');
       navigate('/login');
     } catch (err) {
       console.error('Logout failed');

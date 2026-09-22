@@ -8,7 +8,7 @@ from typing import Optional
 
 import httpx
 import fitz  # PyMuPDF
-from newspaper import Article
+import trafilatura
 import jwt
 from dotenv import load_dotenv
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, Request
@@ -152,12 +152,12 @@ async def ingest_document(
     elif url:
         source = url
         try:
-            article = Article(url)
-            article.download()
-            article.parse()
-            text = article.text
+            downloaded = trafilatura.fetch_url(url)
+            if not downloaded:
+                raise ValueError("Could not download the URL.")
+            text = trafilatura.extract(downloaded, include_comments=False, include_tables=True)
             if not text:
-                raise ValueError("No article content found")
+                raise ValueError("No article content found at URL.")
         except Exception as e:
             raise HTTPException(
                 status_code=400, detail=f"Failed to scrape URL: {str(e)}"

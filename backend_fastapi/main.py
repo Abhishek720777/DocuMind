@@ -48,12 +48,12 @@ text_splitter = RecursiveCharacterTextSplitter(
 # ── App ───────────────────────────────────────────────────────────────────────
 app = FastAPI(title="DocuMind RAG API")
 
-GROQ_MODEL: str = "llama-3.1-8b-instant"
+GROQ_MODEL: str = "qwen/qwen3.8-27b"
 
 @app.on_event("startup")
 async def startup_event():
     global GROQ_MODEL
-    GROQ_MODEL = "llama-3.1-8b-instant"
+    GROQ_MODEL = "qwen/qwen3.8-27b"
 
 app.add_middleware(
     CORSMiddleware,

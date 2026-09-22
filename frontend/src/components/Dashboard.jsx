@@ -62,8 +62,11 @@ function Dashboard() {
       const response = await ragApi.post('ingest', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      
-      setMessage(`Success! Ingested ${response.data.chunks_processed} chunks from ${response.data.source}`);
+
+      // Save document record to Django after successful FastAPI ingestion
+      await api.post('documents/', { source: response.data.source });
+
+      setMessage(`Success! Ingested ${response.data.chunks_processed} chunks from "${response.data.source}"`);
       setFile(null);
       setUrl('');
       fetchDocuments(); // Refresh the list

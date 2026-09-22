@@ -48,12 +48,12 @@ text_splitter = RecursiveCharacterTextSplitter(
 # ── App ───────────────────────────────────────────────────────────────────────
 app = FastAPI(title="DocuMind RAG API")
 
-GROQ_MODEL: str = "llama3-8b-8192"
+GROQ_MODEL: str = "llama-3.1-8b-instant"
 
 @app.on_event("startup")
 async def startup_event():
     global GROQ_MODEL
-    GROQ_MODEL = "llama3-8b-8192"
+    GROQ_MODEL = "llama-3.1-8b-instant"
 
 app.add_middleware(
     CORSMiddleware,
@@ -119,7 +119,6 @@ async def ingest_document(
     file: Optional[UploadFile] = File(None),
     url: Optional[str] = Form(None),
     user_id: int = Depends(get_current_user_id),
-    access_token: str = Depends(get_access_token)
 ):
     text = ""
     source = ""
@@ -191,22 +190,6 @@ async def ingest_document(
         metadatas=metadatas,
         ids=ids,
     )
-
-    # Automatically sync the document to Django internally
-    django_url = os.getenv("DJANGO_API_URL", "http://django:8000/api/users/documents/")
-    if not os.environ.get('DB_HOST'):
-        django_url = "http://localhost:8000/api/users/documents/"
-
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(
-                django_url,
-                json={"source": source},
-                cookies={"access_token": access_token}
-            )
-            resp.raise_for_status()
-    except Exception as e:
-        print(f"Warning: Failed to sync document to Django: {e}")
 
     return {
         "message": "Ingestion successful",

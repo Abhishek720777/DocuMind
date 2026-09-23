@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 import httpx
-import fitz  # PyMuPDF
+import pymupdf
 import trafilatura
 import jwt
 from dotenv import load_dotenv
@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from groq import Groq
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pydantic import BaseModel
-from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 import chromadb
 
 # ── Load .env from the project root ──────────────────────────────────────────
@@ -33,8 +33,8 @@ if not DJANGO_SECRET_KEY:
 
 groq_client = Groq(api_key=GROQ_API_KEY)
 
-# ── RAG components ────────────────────────────────────────────────────────────
-embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+# ── RAG components (Ultra-lightweight ONNX runtime embedding model) ───────────
+embedding_model = TextEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2")
 chroma_client = chromadb.PersistentClient(path="./chroma_db")
 collection = chroma_client.get_or_create_collection(name="documind_chunks")
 
@@ -71,7 +71,6 @@ def get_current_user_id(request: Request) -> int:
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated (missing access_token cookie)")
     try:
-        # Django SimpleJWT creates tokens with user_id in the 'user_id' claim
         payload = jwt.decode(token, DJANGO_SECRET_KEY, algorithms=["HS256"])
         return payload.get("user_id")
     except jwt.ExpiredSignatureError:
@@ -91,10 +90,10 @@ def strip_thinking(text: str) -> str:
     return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
 def _extract_text_from_pdf_path(path: str) -> str:
-    """Extract text from a PDF file using PyMuPDF (fitz) for better accuracy."""
+    """Extract text from a PDF file using PyMuPDF."""
     text = ""
     try:
-        doc = fitz.open(path)
+        doc = pymupdf.open(path)
         for page in doc:
             text += page.get_text("text") + "\n"
         doc.close()
@@ -177,7 +176,8 @@ async def ingest_document(
             status_code=400, detail="Could not generate chunks from the text."
         )
 
-    embeddings = embedding_model.encode(chunks).tolist()
+    # Use fastembed to convert chunks to embeddings (ONNX-based, ultra-low memory)
+    embeddings = [e.tolist() for e in embedding_model.embed(chunks)]
     ids = [str(uuid.uuid4()) for _ in chunks]
     metadatas = [
         {"source": source, "chunk_index": i, "user_id": user_id}
@@ -207,7 +207,8 @@ async def query_document(
     if not question:
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
 
-    query_embedding = embedding_model.encode([question]).tolist()
+    # Generate query embedding with fastembed
+    query_embeddings = [e.tolist() for e in embedding_model.embed([question])]
 
     where_clause: dict = {"user_id": user_id}
     if request.source:
@@ -219,7 +220,7 @@ async def query_document(
         }
 
     results = collection.query(
-        query_embeddings=query_embedding,
+        query_embeddings=query_embeddings,
         n_results=request.top_k,
         where=where_clause,
     )

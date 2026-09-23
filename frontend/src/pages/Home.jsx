@@ -99,7 +99,7 @@ export default function Home() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    api.get('/me/').then(() => setIsLoggedIn(true)).catch(() => setIsLoggedIn(false));
+    api.get('me/').then(() => setIsLoggedIn(true)).catch(() => setIsLoggedIn(false));
   }, []);
 
   const handleCta = useCallback(() => {

@@ -57,7 +57,10 @@ const setupInterceptor = (axiosInstance) => {
                     return axiosInstance(originalRequest);
                 } catch (refreshError) {
                     processQueue(refreshError);
-                    window.location.href = '/login';
+                    const isPublicPage = ['/', '/login', '/register'].includes(window.location.pathname);
+                    if (!isPublicPage && !originalRequest.url.includes('me/')) {
+                        window.location.href = '/login';
+                    }
                     return Promise.reject(refreshError);
                 } finally {
                     isRefreshing = false;

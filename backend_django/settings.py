@@ -72,10 +72,67 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'backend_django.wsgi.application'
 
+import urllib.parse
+
 # ── Database ──────────────────────────────────────────────────────────────────
-# Uses PostgreSQL when DB_HOST is set (e.g., in Docker), otherwise falls back
-# to SQLite for local development without Docker.
-if os.environ.get('DB_HOST'):
+# 1. First priority: DATABASE_URL (Supabase / Neon / Render Postgres)
+# 2. Second priority: DB_HOST individual variables
+# 3. Fallback: SQLite
+database_url = os.environ.get('DATABASE_URL')
+if database_url:
+    # Normalize scheme
+    if database_url.startswith('postgres://'):
+        database_url = 'postgresql://' + database_url[len('postgres://'):]
+
+    # Robust parsing that handles passwords with unescaped '@' characters
+    clean_url = database_url
+    sslmode = 'require'
+    if '?' in clean_url:
+        clean_url, query_str = clean_url.split('?', 1)
+        params = urllib.parse.parse_qs(query_str)
+        if 'sslmode' in params:
+            sslmode = params['sslmode'][0]
+
+    # Strip scheme
+    _, rest = clean_url.split('://', 1)
+
+    # Split credentials and host at the LAST '@'
+    if '@' in rest:
+        user_info, host_info = rest.rsplit('@', 1)
+        if ':' in user_info:
+            db_user, db_password = user_info.split(':', 1)
+        else:
+            db_user, db_password = user_info, ''
+    else:
+        db_user, db_password = '', ''
+        host_info = rest
+
+    # Split host and database path
+    if '/' in host_info:
+        host_port, db_name = host_info.split('/', 1)
+    else:
+        host_port, db_name = host_info, 'postgres'
+
+    # Split host and port
+    if ':' in host_port:
+        db_host, db_port = host_port.split(':', 1)
+    else:
+        db_host, db_port = host_port, '5432'
+
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': db_name,
+            'USER': urllib.parse.unquote(db_user),
+            'PASSWORD': urllib.parse.unquote(db_password),
+            'HOST': db_host,
+            'PORT': db_port,
+            'OPTIONS': {
+                'sslmode': sslmode,
+            },
+        }
+    }
+elif os.environ.get('DB_HOST'):
     DATABASES = {
         'default': {
             'ENGINE': os.environ.get('DB_ENGINE', 'django.db.backends.postgresql'),
@@ -139,5 +196,6 @@ SIMPLE_JWT = {
     'AUTH_COOKIE_SECURE': not DEBUG,   # True in production (HTTPS)
     'AUTH_COOKIE_HTTP_ONLY': True,
     'AUTH_COOKIE_PATH': '/',
-    'AUTH_COOKIE_SAMESITE': 'Lax',
+    'AUTH_COOKIE_SAMESITE': 'None' if not DEBUG else 'Lax',  # 'None' is required for cross-site cookies (Vercel -> Render)
 }
+

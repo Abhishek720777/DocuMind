@@ -94,7 +94,10 @@ class LoginView(APIView):
             )
 
         tokens = get_tokens_for_user(user)
-        response = Response({"message": "Login successful"})
+        response = Response({
+            "message": "Login successful",
+            "access": tokens['access'],
+        })
         _set_auth_cookies(response, tokens)
         return response
 
@@ -133,7 +136,10 @@ class TokenRefreshView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED
             )
 
-        response = Response({"message": "Token refreshed"})
+        response = Response({
+            "message": "Token refreshed",
+            "access": tokens['access'],
+        })
         _set_auth_cookies(response, tokens)
         return response
 
@@ -142,7 +148,12 @@ class UserView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        return Response({"id": request.user.id, "username": request.user.username})
+        tokens = get_tokens_for_user(request.user)
+        return Response({
+            "id": request.user.id,
+            "username": request.user.username,
+            "access": tokens['access'],
+        })
 
 
 class DocumentListView(generics.ListCreateAPIView):

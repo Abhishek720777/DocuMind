@@ -13,6 +13,28 @@ export const ragApi = axios.create({
     withCredentials: true,
 });
 
+// ── Attach Bearer token if available in localStorage ─────────────────────────
+const attachAuthToken = (axiosInstance) => {
+    axiosInstance.interceptors.request.use((config) => {
+        const token = localStorage.getItem('documind_token');
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
+        return config;
+    });
+};
+
+attachAuthToken(api);
+attachAuthToken(ragApi);
+
+// Save access token whenever returned by Django
+api.interceptors.response.use((response) => {
+    if (response?.data?.access) {
+        localStorage.setItem('documind_token', response.data.access);
+    }
+    return response;
+});
+
 // ── Auto-refresh interceptor ────────────────────────────────────────────────
 // If any request gets a 401 (access token expired), transparently call the
 // refresh endpoint to get a new access cookie, then retry the original request.
@@ -52,11 +74,15 @@ const setupInterceptor = (axiosInstance) => {
                 isRefreshing = true;
 
                 try {
-                    await api.post('token/refresh/');
+                    const refreshRes = await api.post('token/refresh/');
+                    if (refreshRes?.data?.access) {
+                        localStorage.setItem('documind_token', refreshRes.data.access);
+                    }
                     processQueue(null);
                     return axiosInstance(originalRequest);
                 } catch (refreshError) {
                     processQueue(refreshError);
+                    localStorage.removeItem('documind_token');
                     const isPublicPage = ['/', '/login', '/register'].includes(window.location.pathname);
                     if (!isPublicPage && !originalRequest.url.includes('me/')) {
                         window.location.href = '/login';

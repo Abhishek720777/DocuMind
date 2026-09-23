@@ -74,7 +74,12 @@ app.add_middleware(
 def get_current_user_id(request: Request) -> int:
     token = request.cookies.get("access_token")
     if not token:
-        raise HTTPException(status_code=401, detail="Not authenticated (missing access_token cookie)")
+        auth_header = request.headers.get("Authorization") or request.headers.get("authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header.split(" ", 1)[1]
+
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated (missing access_token)")
     try:
         payload = jwt.decode(token, DJANGO_SECRET_KEY, algorithms=["HS256"])
         return payload.get("user_id")
@@ -85,6 +90,10 @@ def get_current_user_id(request: Request) -> int:
 
 def get_access_token(request: Request) -> str:
     token = request.cookies.get("access_token")
+    if not token:
+        auth_header = request.headers.get("Authorization") or request.headers.get("authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header.split(" ", 1)[1]
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
     return token

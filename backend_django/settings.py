@@ -119,6 +119,8 @@ if database_url:
     else:
         db_host, db_port = host_port, '5432'
 
+    print(f"[DB] Configured PostgreSQL: user='{db_user}', host='{db_host}', port={db_port}, db='{db_name}', sslmode='{sslmode}'")
+
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',

@@ -60,15 +60,24 @@ async def startup_event():
     collection = chroma_client.get_or_create_collection(name="documind_chunks")
     print("RAG components initialized successfully.")
 
+raw_origins = os.environ.get("CORS_ALLOWED_ORIGINS", "http://localhost:5173").split(",")
+allowed_origins = [o.strip().rstrip("/") for o in raw_origins if o.strip()]
+if "https://docu-mind-lemon.vercel.app" not in allowed_origins:
+    allowed_origins.append("https://docu-mind-lemon.vercel.app")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.environ.get(
-        "CORS_ALLOWED_ORIGINS", "http://localhost:5173"
-    ).split(","),
+    allow_origins=allowed_origins,
+    allow_origin_regex=r"^https://.*\.vercel\.app$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.get("/")
+async def root():
+    return {"status": "ok", "service": "DocuMind FastAPI RAG"}
+
 
 # ── Auth Dependency ───────────────────────────────────────────────────────────
 def get_current_user_id(request: Request) -> int:

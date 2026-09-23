@@ -1,12 +1,15 @@
 import axios from 'axios';
 
+const DJANGO_URL = import.meta.env.VITE_DJANGO_API_URL || 'http://127.0.0.1:8000/api/users/';
+const FASTAPI_URL = import.meta.env.VITE_FASTAPI_URL || 'http://127.0.0.1:8001/';
+
 const api = axios.create({
-    baseURL: import.meta.env.VITE_DJANGO_API_URL || '/api/users/', // Routes through Vite proxy
+    baseURL: DJANGO_URL,
     withCredentials: true,
 });
 
 export const ragApi = axios.create({
-    baseURL: import.meta.env.VITE_FASTAPI_URL || '/', // Routes through Vite proxy
+    baseURL: FASTAPI_URL,
     withCredentials: true,
 });
 

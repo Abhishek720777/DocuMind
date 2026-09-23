@@ -18,7 +18,16 @@ function Login() {
       await api.post('login/', { username, password });
       navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.error || 'Login failed. Please check your credentials.');
+      const data = err.response?.data;
+      let msg = 'Login failed. Please check your credentials.';
+      if (data?.error) msg = data.error;
+      else if (data?.detail) msg = data.detail;
+      else if (data && typeof data === 'object') {
+        const firstField = Object.keys(data)[0];
+        const firstMsg = data[firstField];
+        msg = Array.isArray(firstMsg) ? firstMsg[0] : String(firstMsg);
+      }
+      setError(msg);
     } finally {
       setLoading(false);
     }

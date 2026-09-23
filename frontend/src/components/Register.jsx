@@ -50,7 +50,21 @@ function Register() {
       await api.post('login/', { username, password });
       navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.error || 'Registration failed. Please try again.');
+      const data = err.response?.data;
+      let msg = 'Registration failed. Please try again.';
+      if (typeof data === 'string') {
+        msg = 'Registration failed. Please try again.';
+      } else if (data?.error) {
+        msg = data.error;
+      } else if (data?.detail) {
+        msg = data.detail;
+      } else if (data && typeof data === 'object') {
+        // Django field-level errors e.g. {username: ['already exists']}
+        const firstField = Object.keys(data)[0];
+        const firstMsg = data[firstField];
+        msg = Array.isArray(firstMsg) ? firstMsg[0] : String(firstMsg);
+      }
+      setError(msg);
     } finally {
       setLoading(false);
     }

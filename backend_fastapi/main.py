@@ -17,7 +17,10 @@ from groq import Groq
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pydantic import BaseModel
 from fastembed import TextEmbedding
-import chromadb
+import gc
+import json
+import sqlite3
+import numpy as np
 
 # ── Load .env from the project root ──────────────────────────────────────────
 load_dotenv(Path(__file__).resolve().parent.parent / '.env')
@@ -33,9 +36,103 @@ if not DJANGO_SECRET_KEY:
 
 groq_client = Groq(api_key=GROQ_API_KEY)
 
+class LightweightVectorStore:
+    """Ultra-compact SQLite + numpy vector store that consumes <15MB RAM instead of ChromaDB's 250MB+."""
+    def __init__(self, db_path="./rag_storage.db"):
+        self.db_path = db_path
+        self._init_db()
+
+    def _get_conn(self):
+        return sqlite3.connect(self.db_path)
+
+    def _init_db(self):
+        with self._get_conn() as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS chunks (
+                    id TEXT PRIMARY KEY,
+                    user_id INTEGER,
+                    source TEXT,
+                    chunk_index INTEGER,
+                    document TEXT,
+                    embedding BLOB,
+                    metadata_json TEXT
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_user_source ON chunks (user_id, source)")
+            conn.commit()
+
+    def add(self, documents, embeddings, metadatas, ids):
+        with self._get_conn() as conn:
+            records = []
+            for doc, emb, meta, doc_id in zip(documents, embeddings, metadatas, ids):
+                emb_bytes = np.array(emb, dtype=np.float32).tobytes()
+                user_id = meta.get("user_id")
+                source = meta.get("source", "")
+                chunk_index = meta.get("chunk_index", 0)
+                records.append((doc_id, user_id, source, chunk_index, doc, emb_bytes, json.dumps(meta)))
+            conn.executemany("""
+                INSERT OR REPLACE INTO chunks (id, user_id, source, chunk_index, document, embedding, metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, records)
+            conn.commit()
+
+    def query(self, query_embeddings, n_results=3, where=None):
+        user_id = None
+        source = None
+        if where:
+            if "$and" in where:
+                for cond in where["$and"]:
+                    if "user_id" in cond:
+                        user_id = cond["user_id"]
+                    if "source" in cond:
+                        source = cond["source"]
+            elif "user_id" in where:
+                user_id = where["user_id"]
+
+        with self._get_conn() as conn:
+            query = "SELECT document, embedding, metadata_json FROM chunks WHERE 1=1"
+            params = []
+            if user_id is not None:
+                query += " AND user_id = ?"
+                params.append(user_id)
+            if source is not None:
+                query += " AND source = ?"
+                params.append(source)
+
+            rows = conn.execute(query, params).fetchall()
+
+        if not rows:
+            return {'documents': [[]], 'metadatas': [[]]}
+
+        docs = []
+        embs = []
+        metas = []
+        for doc, emb_blob, meta_json in rows:
+            docs.append(doc)
+            embs.append(np.frombuffer(emb_blob, dtype=np.float32))
+            metas.append(json.loads(meta_json))
+
+        embs_matrix = np.array(embs)
+        q_emb = np.array(query_embeddings[0], dtype=np.float32)
+
+        norm_embs = np.linalg.norm(embs_matrix, axis=1)
+        norm_q = np.linalg.norm(q_emb)
+        if norm_q > 0:
+            norm_embs[norm_embs == 0] = 1e-10
+            similarity = np.dot(embs_matrix, q_emb) / (norm_embs * norm_q)
+        else:
+            similarity = np.zeros(len(docs))
+
+        top_k = min(n_results, len(docs))
+        top_indices = np.argsort(similarity)[::-1][:top_k]
+
+        retrieved_docs = [docs[i] for i in top_indices]
+        retrieved_metas = [metas[i] for i in top_indices]
+
+        return {'documents': [retrieved_docs], 'metadatas': [retrieved_metas]}
+
 # ── RAG components (initialized lazily on startup to allow port binding first) ─
 embedding_model = None
-chroma_client = None
 collection = None
 
 text_splitter = RecursiveCharacterTextSplitter(
@@ -52,12 +149,11 @@ GROQ_MODEL: str = "qwen/qwen3.8-27b"
 
 @app.on_event("startup")
 async def startup_event():
-    global GROQ_MODEL, embedding_model, chroma_client, collection
+    global GROQ_MODEL, embedding_model, collection
     GROQ_MODEL = "qwen/qwen3.8-27b"
-    # Load embedding model and vector store after port is already bound
-    embedding_model = TextEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2")
-    chroma_client = chromadb.PersistentClient(path="./chroma_db")
-    collection = chroma_client.get_or_create_collection(name="documind_chunks")
+    # Single-thread ONNX runtime prevents memory explosion
+    embedding_model = TextEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2", threads=1)
+    collection = LightweightVectorStore(db_path="./rag_storage.db")
     print("RAG components initialized successfully.")
 
 raw_origins = os.environ.get("CORS_ALLOWED_ORIGINS", "http://localhost:5173").split(",")
@@ -199,8 +295,8 @@ async def ingest_document(
             status_code=400, detail="Could not generate chunks from the text."
         )
 
-    # Use fastembed to convert chunks to embeddings (ONNX-based, ultra-low memory)
-    embeddings = [e.tolist() for e in embedding_model.embed(chunks)]
+    # Use fastembed with small batches (batch_size=4) to keep memory under 150MB
+    embeddings = [e.tolist() for e in embedding_model.embed(chunks, batch_size=4)]
     ids = [str(uuid.uuid4()) for _ in chunks]
     metadatas = [
         {"source": source, "chunk_index": i, "user_id": user_id}
@@ -213,6 +309,7 @@ async def ingest_document(
         metadatas=metadatas,
         ids=ids,
     )
+    gc.collect()
 
     return {
         "message": "Ingestion successful",

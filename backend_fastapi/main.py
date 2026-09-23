@@ -33,10 +33,10 @@ if not DJANGO_SECRET_KEY:
 
 groq_client = Groq(api_key=GROQ_API_KEY)
 
-# ── RAG components (Ultra-lightweight ONNX runtime embedding model) ───────────
-embedding_model = TextEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2")
-chroma_client = chromadb.PersistentClient(path="./chroma_db")
-collection = chroma_client.get_or_create_collection(name="documind_chunks")
+# ── RAG components (initialized lazily on startup to allow port binding first) ─
+embedding_model = None
+chroma_client = None
+collection = None
 
 text_splitter = RecursiveCharacterTextSplitter(
     chunk_size=1000,
@@ -52,8 +52,13 @@ GROQ_MODEL: str = "qwen/qwen3.8-27b"
 
 @app.on_event("startup")
 async def startup_event():
-    global GROQ_MODEL
+    global GROQ_MODEL, embedding_model, chroma_client, collection
     GROQ_MODEL = "qwen/qwen3.8-27b"
+    # Load embedding model and vector store after port is already bound
+    embedding_model = TextEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    chroma_client = chromadb.PersistentClient(path="./chroma_db")
+    collection = chroma_client.get_or_create_collection(name="documind_chunks")
+    print("RAG components initialized successfully.")
 
 app.add_middleware(
     CORSMiddleware,

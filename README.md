@@ -1,5 +1,7 @@
 # DocuMind
 
+**Live Demo:** [https://docu-mind-lemon.vercel.app/](https://docu-mind-lemon.vercel.app/)
+
 DocuMind is an intelligent full-stack Retrieval-Augmented Generation (RAG) platform. It allows users to upload documents (PDF, TXT) and scrape web pages, indexing their contents into a persistent vector store to enable conversational querying with verifiable, source-backed citations.
 
 ---

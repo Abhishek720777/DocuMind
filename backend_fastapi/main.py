@@ -148,21 +148,28 @@ class QdrantCloudVectorStore:
                 collection_name=self.collection_name,
                 vectors_config=VectorParams(size=384, distance=Distance.COSINE),
             )
-            # Create payload index for user_id and source for fast filtered querying
-            try:
-                from qdrant_client.models import PayloadSchemaType
-                self.client.create_payload_index(
-                    collection_name=self.collection_name,
-                    field_name="user_id",
-                    field_schema=PayloadSchemaType.INTEGER,
-                )
-                self.client.create_payload_index(
-                    collection_name=self.collection_name,
-                    field_name="source",
-                    field_schema=PayloadSchemaType.KEYWORD,
-                )
-            except Exception as e:
-                print(f"[Qdrant] Index creation note: {e}")
+
+        # Ensure payload indexes exist for user_id and source (idempotent / ignore if already exists)
+        try:
+            from qdrant_client.models import PayloadSchemaType
+            # Index user_id as keyword so match filter works with integer or string
+            self.client.create_payload_index(
+                collection_name=self.collection_name,
+                field_name="user_id",
+                field_schema=PayloadSchemaType.KEYWORD,
+            )
+        except Exception as e:
+            print(f"[Qdrant] user_id index note: {e}")
+
+        try:
+            from qdrant_client.models import PayloadSchemaType
+            self.client.create_payload_index(
+                collection_name=self.collection_name,
+                field_name="source",
+                field_schema=PayloadSchemaType.KEYWORD,
+            )
+        except Exception as e:
+            print(f"[Qdrant] source index note: {e}")
 
     def add(self, documents, embeddings, metadatas, ids):
         from qdrant_client.models import PointStruct

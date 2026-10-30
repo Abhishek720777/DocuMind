@@ -215,6 +215,7 @@ class QdrantCloudVectorStore:
             query=query_embeddings[0],
             query_filter=query_filter,
             limit=n_results,
+            with_payload=True,
         ).points
 
         if not results:
@@ -223,8 +224,9 @@ class QdrantCloudVectorStore:
         retrieved_docs = []
         retrieved_metas = []
         for point in results:
-            doc = point.payload.get("document", "")
-            meta = {k: v for k, v in point.payload.items() if k != "document"}
+            payload = point.payload or {}
+            doc = payload.get("document", "")
+            meta = {k: v for k, v in payload.items() if k != "document"}
             retrieved_docs.append(doc)
             retrieved_metas.append(meta)
 
@@ -436,26 +438,33 @@ async def query_document(
     if not question:
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
 
-    # Generate query embedding with fastembed
-    query_embeddings = [e.tolist() for e in embedding_model.embed([question])]
+    try:
+        # Generate query embedding with fastembed
+        query_embeddings = [e.tolist() for e in embedding_model.embed([question])]
 
-    where_clause: dict = {"user_id": user_id}
-    if request.source:
-        where_clause = {
-            "$and": [
-                {"user_id": user_id},
-                {"source": request.source}
-            ]
-        }
+        where_clause: dict = {"user_id": user_id}
+        if request.source:
+            where_clause = {
+                "$and": [
+                    {"user_id": user_id},
+                    {"source": request.source}
+                ]
+            }
 
-    results = collection.query(
-        query_embeddings=query_embeddings,
-        n_results=request.top_k,
-        where=where_clause,
-    )
+        results = collection.query(
+            query_embeddings=query_embeddings,
+            n_results=request.top_k,
+            where=where_clause,
+        )
 
-    retrieved_chunks = results['documents'][0] if results['documents'] else []
-    retrieved_metadatas = results['metadatas'][0] if results['metadatas'] else []
+        retrieved_chunks = results['documents'][0] if results['documents'] else []
+        retrieved_metadatas = results['metadatas'][0] if results['metadatas'] else []
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500, detail=f"Vector store search failed: {str(e)}"
+        )
 
     if not retrieved_chunks:
         return {

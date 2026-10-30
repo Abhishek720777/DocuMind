@@ -131,6 +131,105 @@ class LightweightVectorStore:
 
         return {'documents': [retrieved_docs], 'metadatas': [retrieved_metas]}
 
+
+class QdrantCloudVectorStore:
+    """Production Cloud Vector Store using Qdrant (survives restarts/deploys)."""
+    def __init__(self, url: str, api_key: Optional[str] = None, collection_name: str = "documind_chunks"):
+        from qdrant_client import QdrantClient
+        from qdrant_client.models import Distance, VectorParams
+        self.collection_name = collection_name
+        self.client = QdrantClient(url=url, api_key=api_key)
+
+        # Ensure collection exists (MiniLM dimension is 384)
+        collections_response = self.client.get_collections()
+        existing = [c.name for c in collections_response.collections]
+        if self.collection_name not in existing:
+            self.client.create_collection(
+                collection_name=self.collection_name,
+                vectors_config=VectorParams(size=384, distance=Distance.COSINE),
+            )
+            # Create payload index for user_id and source for fast filtered querying
+            try:
+                from qdrant_client.models import PayloadSchemaType
+                self.client.create_payload_index(
+                    collection_name=self.collection_name,
+                    field_name="user_id",
+                    field_schema=PayloadSchemaType.INTEGER,
+                )
+                self.client.create_payload_index(
+                    collection_name=self.collection_name,
+                    field_name="source",
+                    field_schema=PayloadSchemaType.KEYWORD,
+                )
+            except Exception as e:
+                print(f"[Qdrant] Index creation note: {e}")
+
+    def add(self, documents, embeddings, metadatas, ids):
+        from qdrant_client.models import PointStruct
+        points = []
+        for doc, emb, meta, doc_id in zip(documents, embeddings, metadatas, ids):
+            payload = {
+                **meta,
+                "document": doc,
+            }
+            points.append(
+                PointStruct(
+                    id=doc_id,
+                    vector=emb,
+                    payload=payload,
+                )
+            )
+        self.client.upsert(
+            collection_name=self.collection_name,
+            points=points,
+        )
+
+    def query(self, query_embeddings, n_results=3, where=None):
+        from qdrant_client.models import Filter, FieldCondition, MatchValue
+        user_id = None
+        source = None
+        if where:
+            if "$and" in where:
+                for cond in where["$and"]:
+                    if "user_id" in cond:
+                        user_id = cond["user_id"]
+                    if "source" in cond:
+                        source = cond["source"]
+            elif "user_id" in where:
+                user_id = where["user_id"]
+
+        must_conditions = []
+        if user_id is not None:
+            must_conditions.append(
+                FieldCondition(key="user_id", match=MatchValue(value=user_id))
+            )
+        if source is not None:
+            must_conditions.append(
+                FieldCondition(key="source", match=MatchValue(value=source))
+            )
+
+        query_filter = Filter(must=must_conditions) if must_conditions else None
+
+        results = self.client.query_points(
+            collection_name=self.collection_name,
+            query=query_embeddings[0],
+            query_filter=query_filter,
+            limit=n_results,
+        ).points
+
+        if not results:
+            return {'documents': [[]], 'metadatas': [[]]}
+
+        retrieved_docs = []
+        retrieved_metas = []
+        for point in results:
+            doc = point.payload.get("document", "")
+            meta = {k: v for k, v in point.payload.items() if k != "document"}
+            retrieved_docs.append(doc)
+            retrieved_metas.append(meta)
+
+        return {'documents': [retrieved_docs], 'metadatas': [retrieved_metas]}
+
 # ── RAG components (initialized lazily on startup to allow port binding first) ─
 embedding_model = None
 collection = None
@@ -153,7 +252,17 @@ async def startup_event():
     GROQ_MODEL = "qwen/qwen3.8-27b"
     # Single-thread ONNX runtime prevents memory explosion
     embedding_model = TextEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2", threads=1)
-    collection = LightweightVectorStore(db_path="./rag_storage.db")
+    
+    qdrant_url = os.getenv("QDRANT_URL", "").strip()
+    qdrant_api_key = os.getenv("QDRANT_API_KEY", "").strip() or None
+    if qdrant_url:
+        print(f"Connecting to Qdrant Cloud at {qdrant_url}...")
+        collection = QdrantCloudVectorStore(url=qdrant_url, api_key=qdrant_api_key)
+        print("Connected to Qdrant Cloud vector store successfully.")
+    else:
+        db_path = os.getenv("RAG_DB_PATH", "./rag_storage.db")
+        collection = LightweightVectorStore(db_path=db_path)
+        print(f"Using LightweightVectorStore at {db_path}.")
     print("RAG components initialized successfully.")
 
 raw_origins = os.environ.get("CORS_ALLOWED_ORIGINS", "http://localhost:5173").split(",")

@@ -41,12 +41,12 @@ api.interceptors.response.use((response) => {
 let isRefreshing = false;
 let failedQueue = [];
 
-const processQueue = (error) => {
+const processQueue = (error, token = null) => {
     failedQueue.forEach(prom => {
         if (error) {
             prom.reject(error);
         } else {
-            prom.resolve();
+            prom.resolve(token);
         }
     });
     failedQueue = [];
@@ -60,14 +60,18 @@ const setupInterceptor = (axiosInstance) => {
             if (
                 error.response?.status === 401 &&
                 !originalRequest._retry &&
-                !originalRequest.url.includes('token/refresh') &&
-                !originalRequest.url.includes('login')
+                !originalRequest.url?.includes('token/refresh') &&
+                !originalRequest.url?.includes('login')
             ) {
                 if (isRefreshing) {
                     return new Promise((resolve, reject) => {
                         failedQueue.push({ resolve, reject });
-                    }).then(() => axiosInstance(originalRequest))
-                      .catch(err => Promise.reject(err));
+                    }).then((newToken) => {
+                        if (newToken) {
+                            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+                        }
+                        return axiosInstance(originalRequest);
+                    }).catch(err => Promise.reject(err));
                 }
 
                 originalRequest._retry = true;
@@ -75,16 +79,18 @@ const setupInterceptor = (axiosInstance) => {
 
                 try {
                     const refreshRes = await api.post('token/refresh/');
-                    if (refreshRes?.data?.access) {
-                        localStorage.setItem('documind_token', refreshRes.data.access);
+                    const newToken = refreshRes?.data?.access;
+                    if (newToken) {
+                        localStorage.setItem('documind_token', newToken);
+                        originalRequest.headers.Authorization = `Bearer ${newToken}`;
                     }
-                    processQueue(null);
+                    processQueue(null, newToken);
                     return axiosInstance(originalRequest);
                 } catch (refreshError) {
-                    processQueue(refreshError);
+                    processQueue(refreshError, null);
                     localStorage.removeItem('documind_token');
                     const isPublicPage = ['/', '/login', '/register'].includes(window.location.pathname);
-                    if (!isPublicPage && !originalRequest.url.includes('me/')) {
+                    if (!isPublicPage && !originalRequest.url?.includes('me/')) {
                         window.location.href = '/login';
                     }
                     return Promise.reject(refreshError);

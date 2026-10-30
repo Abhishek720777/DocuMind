@@ -67,9 +67,17 @@ function Chat() {
         citations: response.data.citations
       }]);
     } catch (err) {
+      let errorMsg = err.response?.data?.detail;
+      if (!errorMsg) {
+        if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+          errorMsg = 'Backend server is waking up from sleep. Please wait a moment and try sending your question again.';
+        } else {
+          errorMsg = 'An error occurred while communicating with the AI backend. If the service just woke up, please try once more.';
+        }
+      }
       setMessages(prev => [...prev, { 
         role: 'error', 
-        content: err.response?.data?.detail || 'An error occurred while generating the answer from your knowledge base.' 
+        content: errorMsg
       }]);
     } finally {
       setLoading(false);

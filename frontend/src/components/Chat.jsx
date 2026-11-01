@@ -12,6 +12,7 @@ function Chat() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef(null);
+  const inputRef = useRef(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -81,15 +82,20 @@ function Chat() {
       }]);
     } finally {
       setLoading(false);
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 50);
     }
   };
 
   const handleLogout = async () => {
     try {
       await api.post('logout/');
-      navigate('/login');
     } catch (err) {
       console.error('Logout failed');
+    } finally {
+      localStorage.removeItem('documind_token');
+      navigate('/login', { replace: true });
     }
   };
 
@@ -193,6 +199,7 @@ function Chat() {
         <div className="dm-chat-bottom-bar">
           <form onSubmit={handleSend} className="dm-chat-input-form">
             <input
+              ref={inputRef}
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}

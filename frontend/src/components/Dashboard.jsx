@@ -43,9 +43,11 @@ function Dashboard() {
   const handleLogout = async () => {
     try {
       await api.post('logout/');
-      navigate('/login');
     } catch (err) {
       console.error('Logout failed');
+    } finally {
+      localStorage.removeItem('documind_token');
+      navigate('/login', { replace: true });
     }
   };
 
@@ -145,8 +147,6 @@ function Dashboard() {
             </svg>
             <span className="dm-dash-brand-title">DocuMind</span>
           </Link>
-          <span className="dm-dash-nav-divider">/</span>
-          <span className="dm-dash-tagline">Knowledge Studio</span>
         </div>
 
         <div className="dm-dash-nav-actions">

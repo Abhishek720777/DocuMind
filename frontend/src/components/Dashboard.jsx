@@ -11,6 +11,7 @@ function Dashboard() {
   const [url, setUrl] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
+  const [docsLoading, setDocsLoading] = useState(true);
   const [message, setMessage] = useState({ text: '', type: '' });
   const [dragOver, setDragOver] = useState(false);
   const navigate = useNavigate();
@@ -21,6 +22,8 @@ function Dashboard() {
       setDocuments(response.data);
     } catch (err) {
       console.error('Failed to fetch documents');
+    } finally {
+      setDocsLoading(false);
     }
   };
 
@@ -327,7 +330,34 @@ function Dashboard() {
             </div>
 
             <div className="dm-shelf-body">
-              {documents.length === 0 ? (
+              {docsLoading ? (
+                <div className="dm-shelf-loading">
+                  <div className="dm-skeleton-row">
+                    <div className="dm-skeleton-badge" />
+                    <div className="dm-skeleton-text-wrap">
+                      <div className="dm-skeleton-line dm-skeleton-line--title" />
+                      <div className="dm-skeleton-line dm-skeleton-line--sub" />
+                    </div>
+                    <div className="dm-skeleton-btn" />
+                  </div>
+                  <div className="dm-skeleton-row">
+                    <div className="dm-skeleton-badge" />
+                    <div className="dm-skeleton-text-wrap">
+                      <div className="dm-skeleton-line dm-skeleton-line--title" />
+                      <div className="dm-skeleton-line dm-skeleton-line--sub" />
+                    </div>
+                    <div className="dm-skeleton-btn" />
+                  </div>
+                  <div className="dm-skeleton-row">
+                    <div className="dm-skeleton-badge" />
+                    <div className="dm-skeleton-text-wrap">
+                      <div className="dm-skeleton-line dm-skeleton-line--title" />
+                      <div className="dm-skeleton-line dm-skeleton-line--sub" />
+                    </div>
+                    <div className="dm-skeleton-btn" />
+                  </div>
+                </div>
+              ) : documents.length === 0 ? (
                 <div className="dm-empty-shelf">
                   <div className="dm-empty-mark">
                     <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.4">

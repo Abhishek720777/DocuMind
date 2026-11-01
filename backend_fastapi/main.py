@@ -239,6 +239,49 @@ class QdrantCloudVectorStore:
 
         return {'documents': [retrieved_docs], 'metadatas': [retrieved_metas]}
 
+# ── Embedding Helper (Hosted Hugging Face API with fastembed Fallback) ──────
+HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY", "").strip()
+HF_EMBEDDING_URL = "https://router.huggingface.co/hf-inference/models/sentence-transformers/all-MiniLM-L6-v2"
+
+def compute_embeddings(texts: list[str]) -> list[list[float]]:
+    """
+    Computes 384-dimensional embeddings using Hugging Face's hosted inference API if key is set,
+    falling back to local fastembed CPU runtime if key is missing or on API error.
+    """
+    if HUGGINGFACE_API_KEY:
+        try:
+            # Batch in groups of 32 for optimal HTTP throughput
+            all_embeddings = []
+            batch_size = 32
+            with httpx.Client(timeout=30.0) as client:
+                headers = {
+                    "Authorization": f"Bearer {HUGGINGFACE_API_KEY}",
+                    "Content-Type": "application/json"
+                }
+                for i in range(0, len(texts), batch_size):
+                    batch = texts[i:i + batch_size]
+                    response = client.post(
+                        HF_EMBEDDING_URL,
+                        headers=headers,
+                        json={"inputs": batch}
+                    )
+                    if response.status_code == 200:
+                        batch_res = response.json()
+                        # HF returns list of embeddings for list of inputs
+                        if isinstance(batch_res, list) and len(batch_res) == len(batch):
+                            all_embeddings.extend(batch_res)
+                        else:
+                            raise ValueError(f"Unexpected response structure: {batch_res}")
+                    else:
+                        raise ValueError(f"HF API returned status {response.status_code}: {response.text}")
+            return all_embeddings
+        except Exception as e:
+            print(f"[EmbeddingService] Hosted API error: {e}. Falling back to local fastembed...")
+
+    # Fallback to local fastembed
+    return [e.tolist() for e in embedding_model.embed(texts, batch_size=4)]
+
+
 # ── RAG components (initialized lazily on startup to allow port binding first) ─
 embedding_model = None
 collection = None
@@ -417,8 +460,8 @@ async def ingest_document(
             status_code=400, detail="Could not generate chunks from the text."
         )
 
-    # Use fastembed with small batches (batch_size=4) to keep memory under 150MB
-    embeddings = [e.tolist() for e in embedding_model.embed(chunks, batch_size=4)]
+    # Compute embeddings (Hosted GPU API with local CPU fastembed fallback)
+    embeddings = compute_embeddings(chunks)
     ids = [str(uuid.uuid4()) for _ in chunks]
     metadatas = [
         {"source": source, "chunk_index": i, "user_id": user_id}
@@ -450,8 +493,8 @@ async def query_document(
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
 
     try:
-        # Generate query embedding with fastembed
-        query_embeddings = [e.tolist() for e in embedding_model.embed([question])]
+        # Generate query embedding (Hosted API or local fallback)
+        query_embeddings = compute_embeddings([question])
 
         where_clause: dict = {"user_id": user_id}
         if request.source:

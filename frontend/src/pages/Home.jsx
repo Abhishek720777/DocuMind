@@ -102,8 +102,8 @@ export default function Home() {
     api.get('me/').then(() => setIsLoggedIn(true)).catch(() => setIsLoggedIn(false));
   }, []);
 
-  const handleCta = useCallback(() => {
-    navigate(isLoggedIn ? '/dashboard' : '/register');
+  const handleGetStarted = useCallback(() => {
+    navigate(isLoggedIn ? '/dashboard' : '/login');
   }, [isLoggedIn, navigate]);
 
   useEffect(() => {
@@ -182,7 +182,6 @@ export default function Home() {
           <a href="#specimens" onClick={goTo("specimens")}>What it does</a>
           <a href="#chat-demo" onClick={goTo("chat-demo")}>See it talk</a>
         </div>
-        <button className="dm-btn dm-btn--small" onClick={isLoggedIn ? () => navigate('/dashboard') : goTo("cta")}>{isLoggedIn ? 'Go to Dashboard' : 'Get started'}</button>
       </nav>
 
       <header id="top" className="dm-hero">
@@ -201,7 +200,7 @@ export default function Home() {
             Ask questions naturally and receive precise, verified answers backed by inline page citations.
           </p>
           <div className={`dm-hero-actions ${heroReady ? "dm-sub--in" : ""}`}>
-            <button className="dm-btn dm-btn--primary" onClick={isLoggedIn ? () => navigate('/dashboard') : goTo("cta")}>Get started free</button>
+            <button className="dm-btn dm-btn--primary" onClick={handleGetStarted}>Get started</button>
             <button className="dm-btn dm-btn--ghost" onClick={goTo("chat-demo")}>See it in action</button>
           </div>
         </div>
@@ -324,7 +323,7 @@ export default function Home() {
       <section id="cta" className="dm-cta">
         <h2 className="dm-cta-h">Stop skimming. Start asking.</h2>
         <p>Bring your first file or a link you keep meaning to read properly.</p>
-        <button className="dm-btn dm-btn--primary dm-btn--large" onClick={handleCta}>{isLoggedIn ? 'Go to Dashboard' : 'Try DocuMind free'}</button>
+        <button className="dm-btn dm-btn--primary dm-btn--large" onClick={handleGetStarted}>Get started</button>
       </section>
 
       <footer className="dm-footer">

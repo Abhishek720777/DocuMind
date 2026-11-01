@@ -199,7 +199,7 @@ export default function Home() {
             DocuMind transforms dense PDFs, reports, and web articles into an interactive knowledge base. 
             Ask questions naturally and receive precise, verified answers backed by inline page citations.
           </p>
-          <div className={`dm-hero-actions ${heroReady ? "dm-sub--in" : ""}`}>
+          <div className={`dm-hero-actions ${heroReady ? "dm-hero-actions--in" : ""}`}>
             <button className="dm-btn dm-btn--primary" onClick={handleGetStarted}>Get started</button>
             <button className="dm-btn dm-btn--ghost" onClick={goTo("chat-demo")}>See it in action</button>
           </div>
@@ -479,6 +479,10 @@ const CSS = `
   opacity: 0;
   transform: translateY(14px);
   transition: opacity 0.7s ease 0.65s, transform 0.7s ease 0.65s;
+}
+.dm-hero-actions--in {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .dm-hero-visual {

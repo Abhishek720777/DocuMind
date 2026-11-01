@@ -292,6 +292,10 @@ app.add_middleware(
 async def root():
     return {"status": "ok", "service": "DocuMind FastAPI RAG"}
 
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
 
 # ── Auth Dependency ───────────────────────────────────────────────────────────
 def get_current_user_id(request: Request) -> int:

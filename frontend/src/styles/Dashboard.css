@@ -713,6 +713,16 @@
   color: var(--brass);
   border: 1px solid var(--brass-border);
 }
+.dm-doc-type-badge.md {
+  background: #EBF8F2;
+  color: #1F7A54;
+  border: 1px solid rgba(31, 122, 84, 0.2);
+}
+.dm-doc-type-badge.csv {
+  background: #FFF8E7;
+  color: #B57900;
+  border: 1px solid rgba(181, 121, 0, 0.25);
+}
 
 .dm-doc-details {
   display: flex;

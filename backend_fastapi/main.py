@@ -410,10 +410,10 @@ async def ingest_document(
         source = file.filename
 
         suffix = Path(file.filename).suffix.lower()
-        if suffix not in (".pdf", ".txt"):
+        if suffix not in (".pdf", ".txt", ".md", ".csv"):
             raise HTTPException(
                 status_code=400,
-                detail="Unsupported file type. Use PDF or TXT."
+                detail="Unsupported file type. Use PDF, TXT, MD, or CSV."
             )
 
         tmp_path = None
@@ -424,7 +424,17 @@ async def ingest_document(
 
             if suffix == ".pdf":
                 text = _extract_text_from_pdf_path(tmp_path)
+            elif suffix == ".csv":
+                import csv
+                rows = []
+                with open(tmp_path, "r", encoding="utf-8", errors="replace") as f:
+                    reader = csv.reader(f)
+                    for r in reader:
+                        if any(cell.strip() for cell in r):
+                            rows.append(" | ".join(cell.strip() for cell in r))
+                text = "\n".join(rows)
             else:
+                # .txt and .md
                 with open(tmp_path, "r", encoding="utf-8", errors="replace") as f:
                     text = f.read()
         finally:

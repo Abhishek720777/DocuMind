@@ -52,7 +52,7 @@ function Dashboard() {
   const handleIngest = async (e) => {
     e.preventDefault();
     if (activeTab === 'file' && !file) {
-      setMessage({ text: 'Please select a PDF or TXT file to index.', type: 'error' });
+      setMessage({ text: 'Please select a PDF, TXT, Markdown, or CSV file to index.', type: 'error' });
       return;
     }
     if (activeTab === 'url' && !url.trim()) {
@@ -96,11 +96,12 @@ function Dashboard() {
     setDragOver(false);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const droppedFile = e.dataTransfer.files[0];
-      if (droppedFile.name.endsWith('.pdf') || droppedFile.name.endsWith('.txt')) {
+      const ext = droppedFile.name.toLowerCase();
+      if (ext.endsWith('.pdf') || ext.endsWith('.txt') || ext.endsWith('.md') || ext.endsWith('.csv')) {
         setFile(droppedFile);
         setActiveTab('file');
       } else {
-        setMessage({ text: 'Please provide PDF or TXT documents.', type: 'error' });
+        setMessage({ text: 'Please provide a PDF, TXT, MD, or CSV file.', type: 'error' });
       }
     }
   };
@@ -113,11 +114,18 @@ function Dashboard() {
   }, [documents, searchTerm]);
 
   const getDocMeta = (source) => {
-    if (source.startsWith('http://') || source.startsWith('https://')) {
+    const s = source.toLowerCase();
+    if (s.startsWith('http://') || s.startsWith('https://')) {
       return { type: 'URL', label: 'Web Page', icon: '🌐' };
     }
-    if (source.toLowerCase().endsWith('.pdf')) {
+    if (s.endsWith('.pdf')) {
       return { type: 'PDF', label: 'PDF Document', icon: '📄' };
+    }
+    if (s.endsWith('.md')) {
+      return { type: 'MD', label: 'Markdown', icon: '📝' };
+    }
+    if (s.endsWith('.csv')) {
+      return { type: 'CSV', label: 'Spreadsheet/Data', icon: '📊' };
     }
     return { type: 'TXT', label: 'Text Document', icon: '📝' };
   };
@@ -242,7 +250,7 @@ function Dashboard() {
                   <input 
                     type="file" 
                     id="dm-file-input"
-                    accept=".pdf,.txt"
+                    accept=".pdf,.txt,.md,.csv"
                     onChange={(e) => setFile(e.target.files[0] || null)}
                     disabled={loading}
                     className="dm-hidden-input"
@@ -256,11 +264,11 @@ function Dashboard() {
                     {file ? (
                       <div className="dm-file-info">
                         <span className="dm-file-name">{file.name}</span>
-                        <span className="dm-file-size">{(file.size / 1024).toFixed(1)} KB · PDF/TXT Document</span>
+                        <span className="dm-file-size">{(file.size / 1024).toFixed(1)} KB · Ready to index</span>
                       </div>
                     ) : (
                       <div className="dm-drop-prompt">
-                        <span className="dm-drop-main-text">Drop your PDF or TXT here</span>
+                        <span className="dm-drop-main-text">Drop your PDF, TXT, MD, or CSV here</span>
                         <span className="dm-drop-sub-text">or click to browse your files</span>
                       </div>
                     )}

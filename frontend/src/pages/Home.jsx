@@ -60,7 +60,7 @@ const SPECIMENS = [
   },
   {
     title: "Speaks your format",
-    body: "PDF, DOCX, TXT, Markdown, CSV, PPTX, or pasted text — all normalized into the same searchable memory.",
+    body: "PDF, TXT, Markdown, CSV, or Web URLs — all normalized into the same searchable semantic memory.",
   },
 ];
 
@@ -85,7 +85,7 @@ const CHAT_SCRIPT = [
   },
 ];
 
-const FORMATS = ["PDF", "DOCX", "TXT", "Markdown", "CSV", "PPTX", "Web URL", "Pasted text"];
+const FORMATS = ["PDF", "Markdown", "CSV", "TXT", "Web URL", "Documentation", "Research Papers", "Reports"];
 
 export default function Home() {
   const [scrollY, setScrollY] = useState(0);

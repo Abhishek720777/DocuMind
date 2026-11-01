@@ -190,20 +190,19 @@ export default function Home() {
         <div className="dm-hero-copy">
           <h1 className={`dm-h1 ${heroReady ? "dm-h1--in" : ""}`}>
             <span className="dm-h1-line">
-              <span>Hand it your files.</span>
+              <span>Instant answers from</span>
             </span>
             <span className="dm-h1-line dm-h1-line--2">
-              <span>It hands back answers.</span>
+              <span>your complex documents.</span>
             </span>
           </h1>
           <p className={`dm-sub ${heroReady ? "dm-sub--in" : ""}`}>
-            DocuMind reads your PDFs, spreadsheets, and any page you point it at, then sits down
-            and talks through what it found \u2014 with the receipts to back it up. No more re-reading
-            a forty page report to find one paragraph.
+            DocuMind transforms dense PDFs, reports, and web articles into an interactive knowledge base. 
+            Ask questions naturally and receive precise, verified answers backed by inline page citations.
           </p>
           <div className={`dm-hero-actions ${heroReady ? "dm-sub--in" : ""}`}>
-            <button className="dm-btn dm-btn--primary" onClick={isLoggedIn ? () => navigate('/dashboard') : goTo("cta")}>Start reading</button>
-            <button className="dm-btn dm-btn--ghost" onClick={goTo("chat-demo")}>Watch it work</button>
+            <button className="dm-btn dm-btn--primary" onClick={isLoggedIn ? () => navigate('/dashboard') : goTo("cta")}>Get started free</button>
+            <button className="dm-btn dm-btn--ghost" onClick={goTo("chat-demo")}>See it in action</button>
           </div>
         </div>
 

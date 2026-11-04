@@ -335,7 +335,7 @@ app.add_middleware(
 async def root():
     return {"status": "ok", "service": "DocuMind FastAPI RAG"}
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 async def health():
     return {"status": "ok"}
 
